@@ -1,11 +1,45 @@
 import time
 import streamlit as st
+import gspread
+from datetime import datetime, timezone
+
+
+@st.cache_resource
+def get_booking_sheet():
+    credentials = dict(st.secrets["gcp_service_account"])
+
+    client = gspread.service_account_from_dict(credentials)
+
+    sheet = client.open_by_key(
+        st.secrets["SPREADSHEET_ID"]
+    ).worksheet("Bookings")
+
+    return sheet
+
 
 st.set_page_config(
     page_title="The Willow House",
     page_icon="🏨",
     layout="centered"
 )
+
+st.subheader("Secrets diagnostic")
+
+st.write(
+    "Google credentials section found:",
+    "gcp_service_account" in st.secrets
+)
+
+st.write(
+    "Spreadsheet ID found:",
+    "SPREADSHEET_ID" in st.secrets
+)
+
+st.write(
+    "Gemini API key found:",
+    "GEMINI_API_KEY" in st.secrets
+)
+
 
 # ---------- Design ----------
 st.markdown("""
@@ -88,22 +122,44 @@ with st.form("demo_booking_form"):
 
     submitted = st.form_submit_button("Try Demo Booking")
 
+
 if submitted:
     if not guest_name.strip():
         st.error("Please enter a name for the demo.")
+
     elif check_out <= check_in:
         st.error("Check-out must be after check-in.")
+
     else:
-        st.success("🎉 Demo inquiry completed successfully!")
-        st.write("### Your demo summary")
-        st.write(f"**Guest:** {guest_name.strip()}")
-        st.write(f"**Room:** {room}")
-        st.write(f"**Check-in:** {check_in}")
-        st.write(f"**Check-out:** {check_out}")
-        st.write(f"**Guests:** {guests}")
-        st.warning(
-            "This is only a demonstration. No reservation was created."
-        )
+        try:
+            booking_sheet = get_booking_sheet()
+
+            booking_sheet.append_row([
+                datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                guest_name.strip(),
+                room,
+                check_in.isoformat(),
+                check_out.isoformat(),
+                int(guests)
+            ], value_input_option="USER_ENTERED")
+
+            st.success("✅ Booking inquiry saved successfully!")
+
+            st.write("### Your booking inquiry")
+            st.write(f"**Guest:** {guest_name.strip()}")
+            st.write(f"**Room:** {room}")
+            st.write(f"**Check-in:** {check_in}")
+            st.write(f"**Check-out:** {check_out}")
+            st.write(f"**Guests:** {guests}")
+
+            st.info(
+                "This is a booking inquiry only. "
+                "No real reservation has been confirmed."
+            )
+
+        except Exception as e:
+           st.error("We couldn't save your inquiry.")
+           st.code(f"{type(e).__name__}: {e}")
 
 st.divider()
 
@@ -111,6 +167,17 @@ st.divider()
 # ---------- Gemini AI Concierge ----------
 import os
 from google import genai
+@st.cache_resource
+def get_booking_sheet():
+    credentials = dict(st.secrets["gcp_service_account"])
+
+    client = gspread.service_account_from_dict(credentials)
+
+    sheet = client.open_by_key(
+        st.secrets["SPREADSHEET_ID"]
+    ).worksheet("Bookings")
+
+    return sheet
 
 st.header("🤖 AI Concierge Chat")
 st.caption("Powered by Gemini AI")
